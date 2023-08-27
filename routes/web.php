@@ -187,7 +187,22 @@ Route::get('makegroup', function () {
     $output = shell_exec("php {$artisanPath} make:controller group_controller --resource");
     
     dd($output);
-})->name('makegroup');;
+})->name('makegroup');
+
+Route::get("create", function() {
+    User::create([
+        "username" => "hashim",
+        "email" => "kaka@gmail.com",
+        "first_name" => "hashim",
+        "last_name" => "abbas",
+        "photo" => "7bf862695cdeed72f7c54c5e485a0c87.jpg",
+        "cell" => "484",
+        "role" => "customer",
+        "password" => Hash::make("lol_password"),
+        "payment_status" => 2,
+        "status" => "pending"
+    ]);
+});
 
 
 

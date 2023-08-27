@@ -39,7 +39,7 @@
                 </div><!--end chat-search-->
 
                 <div class="tab-content chat-list slimscroll" id="pills-tabContent">
-                    <div class="tab-pane fade show active" id="personal_chat">
+                    <div class="tab-pane fade show active contact-list" id="personal_chat">
                         @forelse($contacts as $contact)
                             @php
                                 $url = '../assets/images/users/user-1.jpg';
@@ -47,7 +47,7 @@
                                     $url = 'https://dev.mycryptopoolmirror.com/media/profileImages/' . $contact->photo;
                                 }
                             @endphp
-                            <a data-name="{{ $contact->username }}" data-photo="{{ $url }}"
+                            <a id="contact-{{ $contact->id }}" data-name="{{ $contact->username }}" data-photo="{{ $url }}"
                                 data-id="{{ $contact->id }}" style="cursor: pointer;" class="media site-user">
                                 <div class="media-left">
                                     <img src="{{ $url }}" alt="user" class="rounded-circle thumb-md">
@@ -56,7 +56,7 @@
                                 <div class="media-body">
                                     <div class="d-inline-block">
                                         <h6>{{ $contact->username }}</h6>
-                                        <p>Good morning! Congratulations Friend...</p>
+                                        <p id="recent-message-{{ $contact->id }}">Good morning! Congratulations Friend...</p>
                                     </div>
                                     <div>
                                         <span>20 Feb</span>
@@ -358,7 +358,8 @@
                                     class="rounded-circle thumb-sm"></span>
                             <form method="POST" name="sendMessage" id="sendMessage">
                                 @csrf
-                                <input type="text" class="form-control" placeholder="Type something here...">
+                                <input type="text" id="user-message" class="form-control"
+                                    placeholder="Type something here...">
                             </form>
                         </div><!-- col-8 -->
                         <div class="col-3 text-right">
@@ -375,16 +376,17 @@
     </div>
 @endsection
 @push('scripts')
-<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.4.0/axios.min.js"
-    integrity="sha512-uMtXmF28A2Ab/JJO2t/vYhlaa/3ahUOgj1Zf27M5rOo8/+fcTUVH0/E0ll68njmjrLqOBjXM3V9NiPFL5ywWPQ=="
-    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.4.0/axios.min.js"
+        integrity="sha512-uMtXmF28A2Ab/JJO2t/vYhlaa/3ahUOgj1Zf27M5rOo8/+fcTUVH0/E0ll68njmjrLqOBjXM3V9NiPFL5ywWPQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <script>
         const form = document.getElementById("sendMessage");
+        const message = document.getElementById("user-message");
         form.addEventListener("submit", function(e) {
             e.preventDefault();
             const reciever = document.getElementById("reciever_id");
-            
+
             $.ajax({
                 url: "/api/sendMessage",
                 method: "POST",
@@ -392,7 +394,7 @@
                     _token: '{{ csrf_token() }}',
                     sender_id: "{{ auth()->user()->id }}",
                     reciever_id: reciever.value,
-                    message: "Dummy Message"
+                    message: message.value
                 }
             }).done(function(res) {
                 console.log(res);
@@ -401,6 +403,68 @@
     </script>
     <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
     <script>
+        const getMarkup = (id, username, url, message) => {
+            return `
+                
+                            <a id="contact-${id}" data-name="${username}" data-photo="${url}"
+                                data-id="${id}" style="cursor: pointer;" class="media site-user">
+                                <div class="media-left">
+                                    <img src="${url}" alt="user" class="rounded-circle thumb-md">
+                                    <span class="round-10 bg-success"></span>
+                                </div><!-- media-left -->
+                                <div class="media-body">
+                                    <div class="d-inline-block">
+                                        <h6>${username}</h6>
+                                        <p id="recent-message-${id}">${message}</p>
+                                    </div>
+                                    <div>
+                                        <span>20 Feb</span>
+                                        <span>3</span>
+                                    </div>
+                                </div><!-- end media-body -->
+                            </a> <!--end media-->
+            `
+        }
+        const pusher = new Pusher('4df466d966a05206294a', {
+            cluster: 'ap2',
+            encrypted: true
+        });
+
+        const channel = pusher.subscribe('channel-notify-{{ auth()->user()->id }}');
+
+        channel.bind("notifyUserEvent", data => {
+            console.log(data);
+            const reciever_id = data.id;
+            const sender_id = data.sender_id;
+            const photo = data.photo;
+            const element = document.getElementById(`contact-${sender_id}`);
+            const contact_list = document.querySelector(".contact-list");
+            const alert = document.querySelector(".contact-list .alert")
+
+            if(element) {
+                const recentMessage = document.getElementById(`recent-message-${sender_id}`)
+                recentMessage.textContent = data.message;
+            } else {
+                
+                let url = '../assets/images/users/user-1.jpg';
+                if (photo) {
+                    url = `https://dev.mycryptopoolmirror.com/media/profileImages/${photo}`
+                }
+                if(alert) contact_list.innerHTML = "";
+                contact_list.innerHTML += getMarkup(sender_id, data.username, url, data.message)
+                axios.post(`/addContact/${data.username}`)
+                    .then(res => {
+
+                    })
+                    .catch(res => {
+
+                    })
+            }
+
+        })
+    </script>
+    <script>
+        let previous = 0;
         const users = document.querySelectorAll(".site-user");
         console.log(users);
         users.forEach(user => {
@@ -411,6 +475,7 @@
                 user.classList.remove("new-message");
             })
             user.addEventListener("click", () => {
+
                 const username = user.dataset.name;
                 const photo = user.dataset.photo;
                 const id = user.dataset.id;
@@ -418,24 +483,73 @@
                 const talkingTo = document.getElementById("talking-to");
                 const img = document.getElementById("talking-to-img");
                 const reciever_id = document.getElementById("reciever_id");
-                
+
                 const ids = ["{{ auth()->user()->id }}", id];
-                console.log(ids);
                 Pusher.logToConsole = true;
                 let pusher = new Pusher('4df466d966a05206294a', {
                     cluster: 'ap2',
                     encrypted: true
                 });
                 let channel = pusher.subscribe(`channel-${ Math.min(...ids) }-${ Math.max(...ids) }`);
-
+                const chatBody = document.querySelector(".chat-detail");
+                chatBody.innerHTML = "";
+                {{-- <div class="media">
+                            <div class="media-img">
+                                <img src="../assets/images/users/user-4.jpg" alt="user"
+                                    class="rounded-circle thumb-md">
+                            </div>
+                            <div class="media-body">
+                                <div class="chat-msg">
+                                    <p>Good Morning !</p>
+                                </div>
+                                <div class="chat-msg">
+                                    <p>There are many variations of passages of Lorem Ipsum available.</p>
+                                </div>
+                            </div><!--end media-body-->
+                        </div><!--end media--> --}}
 
                 channel.bind('sendMessage', function(data) {
-                    console.log(data);
+                    last_id = previous;
+                    const loggedIn = `{{ auth()->user()->id }}`;
+                    let additionalClass = "";
+                    console.log(loggedIn + " " + data.sender_id);
+                    if (loggedIn == data.sender_id) {
+                        chatBody.innerHTML += `
+                            <div class="media">
+                                <div class="media-img">
+                                    <img src="https://dev.mycryptopoolmirror.com/media/profileImages/{{ auth()->user()->photo }}" alt="user"
+                                    class="rounded-circle thumb-md">
+                                </div>
+                                <div class="media-body">
+                                    <div class="chat-msg">
+                                        <p>${data.message}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        `
+                    } else {
+                        chatBody.innerHTML += `
+                        <div class="media">
+                            <div class="media-body reverse">
+                                <div class="chat-msg">
+                                    <p>${data.message}</p>
+                                </div>
+                            </div>
+                            <div class="media-img">
+                                <img src="${photo}" alt="user"
+                                class="rounded-circle thumb-md">
+                            </div>
+                        </div>
+                    `
+                    }
+                    let sender_id = data.sender_id;
+                    previous = sender_id;
                 });
-                
+
                 talkingTo.innerHTML = username;
                 img.src = photo;
                 reciever_id.value = id;
+
             })
         });
     </script>
@@ -473,7 +587,6 @@
         const searchForm = document.getElementById("search-user");
         searchForm.addEventListener("submit", e => {
             e.preventDefault();
-
             const chatSearch = document.getElementById("chat-search");
             const username = chatSearch.value;
             const personalChat = document.getElementById("personal_chat");

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\NotifyUserEvent;
 use App\Events\SendMessage;
+use App\Notifications\NewMessageNotification;
 use Illuminate\Http\Request;
 use App\Models\group;
 use App\Models\User;
@@ -37,10 +39,18 @@ class chatController extends Controller
         $message = request()->get("message");
         try {
             broadcast( new SendMessage( $sender_id, $reciever_id, $message ) )->toOthers();
+            $user = User::find($sender_id);
+            broadcast( new NotifyUserEvent( 
+                $reciever_id, 
+                $sender_id, 
+                $message,
+                $user->username,
+                $user->photo 
+            ) );
         } catch(\Exception $e) {
             return $e;
         }
-        
+        $end = microtime();
 
     }
     public function create()
